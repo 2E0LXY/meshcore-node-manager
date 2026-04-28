@@ -1,8 +1,19 @@
 # MeshCore Node Manager
 
-A Python desktop application for connecting to, monitoring, and messaging
-with **MeshCore** companion radio nodes over **USB serial**, **TCP/WiFi**, or
-**Bluetooth BLE**, built on a decoupled event-bus architecture.
+A desktop app for **Windows, macOS and Linux** that lets you send and receive
+text messages across a **LoRa mesh radio network** using MeshCore-flashed
+hardware such as the Heltec WiFi LoRa 32 V3 / V4.
+
+Connect your radio node by **USB cable**, **WiFi**, or **Bluetooth**, then:
+
+- Chat on the public channel or send private direct messages with delivery confirmation
+- See every node on your mesh — signal strength, GPS position, battery level
+- Track message delivery, round-trip times, and network statistics
+- View node locations plotted on a live map
+- Get desktop and sound alerts when messages arrive
+
+**No cloud. No internet required.** All traffic travels over LoRa radio.
+Range is typically **2–15 km line of sight** depending on hardware and antenna.
 
 > **Licence:** MIT — see [LICENSE](LICENSE)
 > **Python:** 3.10 or later required
