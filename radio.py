@@ -392,7 +392,9 @@ class NodeRadio:
             return {}
         try:
             r = self._submit(self._mc.commands.get_stats(), timeout=5.0)
-            return r.payload or {} if r.type != EventType.ERROR else {}
+            if r.type != EventType.ERROR:
+                return r.payload or {}
+            return {}
         except Exception:
             return {}
 
@@ -404,7 +406,7 @@ class NodeRadio:
 
     def transmit_channel(self, text: str) -> int | None:
         """Broadcast to public channel.  Returns local_id or None on failure."""
-        if not self._online or not text.strip():
+        if not self._online or not self._mc or not text.strip():
             return None
         lid = self._next_id()
         try:
@@ -430,7 +432,7 @@ class NodeRadio:
     def transmit_direct(self, dest: str, text: str,
                         ack: bool = True) -> int | None:
         """Send a direct message.  Returns local_id or None on failure."""
-        if not self._online or not text.strip() or not dest.strip():
+        if not self._online or not self._mc or not text.strip() or not dest.strip():
             return None
         raw = self._find_raw_contact(dest)
         if raw is None:
@@ -565,7 +567,10 @@ class NodeRadio:
         """Return a thread-safe snapshot, oldest first, capped at limit."""
         with self._msg_lock:
             snap = list(self._history)
-        snap.sort(key=lambda m: m.ts_received or m.ts_sent or 0)
+        snap.sort(key=lambda m: (
+            m.ts_received if m.ts_received is not None
+            else (m.ts_sent if m.ts_sent is not None else 0)
+        ))
         return snap[-limit:]
 
     def pending_count(self) -> int:

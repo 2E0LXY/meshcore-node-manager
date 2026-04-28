@@ -20,7 +20,7 @@ from events import (
     EventBus,
     EV_CONNECTED, EV_DISCONNECTED, EV_CONN_ERROR,
     EV_CONTACTS_UPD,
-    EV_MSG_CHANNEL, EV_MSG_DIRECT,
+    EV_MSG_CHANNEL, EV_MSG_DIRECT, EV_MSG_SENT,
     EV_MSG_DELIVERED, EV_MSG_TIMEOUT,
     EV_LOG,
 )
@@ -65,7 +65,7 @@ class ContactsTab(TabBase):
         self._sort_col = ""
         self._sort_rev = False
         self._build()
-        bus.on(EV_CONTACTS_UPD, lambda: self.after_tk(self.refresh))
+        bus.on(EV_CONTACTS_UPD, lambda **_: self.after_tk(self.refresh))
         bus.on(EV_CONNECTED,    lambda **_: self.after_tk(self.refresh))
         bus.on(EV_DISCONNECTED, lambda **_: self.after_tk(self._clear))
 
@@ -220,7 +220,9 @@ class DirectTab(TabBase):
         self._build()
         bus.on(EV_MSG_DIRECT,    lambda **kw: self.after_tk(self._append_rx, kw))
         bus.on(EV_MSG_DELIVERED, lambda **kw: self.after_tk(
-            self._append_note, f"✅ Delivered  (RTT {fmt_rtt(kw.get('rtt'))})"))
+            self._append_note,
+            f"✅ Delivered  (RTT {fmt_rtt(kw.get('rtt'))})" if kw.get('rtt')
+            else "✅ Delivered"))
         bus.on(EV_MSG_TIMEOUT,   lambda **kw: self.after_tk(
             self._append_note, "⏱ Timeout — no ACK received"))
         bus.on(EV_CONTACTS_UPD,  lambda **_: self.after_tk(self._update_dest_list))
@@ -307,7 +309,7 @@ class HistoryTab(TabBase):
     def __init__(self, parent, radio, bus, root):
         super().__init__(parent, radio, bus, root)
         self._build()
-        for ev in (EV_MSG_CHANNEL, EV_MSG_DIRECT,
+        for ev in (EV_MSG_CHANNEL, EV_MSG_DIRECT, EV_MSG_SENT,
                    EV_MSG_DELIVERED, EV_MSG_TIMEOUT):
             bus.on(ev, lambda **_: self.after_tk(self.refresh))
         bus.on(EV_DISCONNECTED, lambda **_: self.after_tk(self.refresh))
@@ -526,7 +528,6 @@ class _PromptDialog(tk.Toplevel):
                       relief="flat").pack(side="left", padx=4)
         self.bind("<Return>", lambda _: self._ok())
         self.bind("<Escape>", lambda _: self.destroy())
-        self.wait_window()
         self.wait_window()
 
     def _ok(self):

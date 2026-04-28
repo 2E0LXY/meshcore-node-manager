@@ -6,8 +6,8 @@ import datetime
 
 
 def ts_to_hms(epoch: float | None) -> str:
-    """Convert a UNIX timestamp to HH:MM:SS, or '—' if None/zero."""
-    if not epoch:
+    """Convert a UNIX timestamp to HH:MM:SS, or '—' if None."""
+    if epoch is None:
         return "—"
     try:
         return datetime.datetime.fromtimestamp(epoch).strftime("%H:%M:%S")
@@ -17,7 +17,7 @@ def ts_to_hms(epoch: float | None) -> str:
 
 def ts_to_iso(epoch: float | None) -> str:
     """Convert a UNIX timestamp to ISO-8601 date-time string."""
-    if not epoch:
+    if epoch is None:
         return "—"
     try:
         return datetime.datetime.fromtimestamp(epoch).strftime("%Y-%m-%d %H:%M:%S")
