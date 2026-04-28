@@ -85,7 +85,7 @@ class Message:
     ts_received:   float | None = None
     ts_delivered:  float | None = None
     rtt:           float | None = None
-    status:        str = "sent"   # sent|pending|delivered|timeout|received
+    status:        str = "unknown"  # sent|pending|delivered|timeout|received — always set explicitly
 
 
 # ── NodeRadio ─────────────────────────────────────────────────────────────────
@@ -211,7 +211,7 @@ class NodeRadio:
         self._emit_log(f"Online [{self._conn_type}] — {self.node_name}", "ok")
 
     def disconnect(self):
-        if not self._online and self._loop is None:
+        if not self._online and self._loop is None and self._mc is None:
             return
         self._emit_log("Disconnecting…", "info")
         try:
@@ -476,6 +476,8 @@ class NodeRadio:
 
     def _on_mc_event(self, event):
         """Called from the background loop by mc.subscribe."""
+        if not _MC_OK or EventType is None:
+            return
         try:
             et = getattr(event, "type", None)
             pl = getattr(event, "payload", None)
@@ -514,14 +516,12 @@ class NodeRadio:
         self._bus.emit(EV_MSG_DIRECT, sender=sender, text=text, ts=now)
         self._emit_log(f"DM [{sender}]: {text}", "info")
 
-    def _advance_pending(self, payload):
+    def _advance_pending(self, _payload):
         """Device confirmed transmission — advance first PENDING msg to SENT."""
         with self._msg_lock:
             for msg in self._pending.values():
                 if msg.status == "pending":
                     msg.status = "sent"
-                    if isinstance(payload, dict):
-                        msg._expected_ack = payload.get("expected_ack", b"")
                     break
 
     def _confirm_delivery(self, _payload):

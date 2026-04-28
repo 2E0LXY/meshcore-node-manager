@@ -48,10 +48,6 @@ def safe_str(value, fallback: str = "—") -> str:
     return s if s else fallback
 
 
-def clamp(value: float, lo: float, hi: float) -> float:
-    return max(lo, min(hi, value))
-
-
 def fmt_rtt(seconds: float | None) -> str:
     if seconds is None:
         return ""

@@ -527,6 +527,7 @@ class _PromptDialog(tk.Toplevel):
         self.bind("<Return>", lambda _: self._ok())
         self.bind("<Escape>", lambda _: self.destroy())
         self.wait_window()
+        self.wait_window()
 
     def _ok(self):
         self.result = self._v.get()
