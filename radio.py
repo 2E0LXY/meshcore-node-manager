@@ -70,7 +70,7 @@ class Contact:
     lat:        float | None = None
     lon:        float | None = None
     battery:    int   | None = None
-    _raw:       object       = field(default=None, repr=False)
+    raw:        object       = field(default=None, repr=False)
 
 
 @dataclass
@@ -348,7 +348,7 @@ class NodeRadio:
             for c in self._contacts.values():
                 if normalise_key(c.key) == needle or \
                    normalise_key(c.name) == needle:
-                    return c._raw
+                    return c.raw
         return None
 
     @staticmethod
@@ -372,7 +372,7 @@ class NodeRadio:
             lon   = getattr(raw_val, "adv_lon",    None)
             batt  = getattr(raw_val, "battery",    None)
         return Contact(key=key, name=name, last_heard=lh, snr=snr, rssi=rssi,
-                       lat=lat, lon=lon, battery=batt, _raw=raw_val)
+                       lat=lat, lon=lon, battery=batt, raw=raw_val)
 
     # ── radio / device info ───────────────────────────────────────────────────
 

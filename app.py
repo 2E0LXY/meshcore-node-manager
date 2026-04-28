@@ -736,17 +736,17 @@ class AppWindow(tk.Tk):
     def _build_notebook(self):
         nb = ttk.Notebook(self)
         nb.pack(fill="both", expand=True, padx=6, pady=4)
-        args = (self._radio, self._bus, self)
-        tabs = [
-            (ContactsTab(*args), "📡 Contacts"),
-            (ChannelTab (*args), "💬 Channel"),
-            (DirectTab  (*args), "📨 Direct"),
-            (HistoryTab (*args), "📊 History"),
-            (RadioTab   (*args), "📻 Radio"),
-            (LogTab     (*args), "📋 Log"),
+        tab_defs = [
+            (ContactsTab, "📡 Contacts"),
+            (ChannelTab,  "💬 Channel"),
+            (DirectTab,   "📨 Direct"),
+            (HistoryTab,  "📊 History"),
+            (RadioTab,    "📻 Radio"),
+            (LogTab,      "📋 Log"),
         ]
         self._tabs = {}
-        for widget, label in tabs:
+        for cls, label in tab_defs:
+            widget = cls(nb, self._radio, self._bus, self)
             nb.add(widget, text=label)
             self._tabs[label] = widget
 
