@@ -1354,6 +1354,11 @@ class AppWindow(tk.Tk):
             threading.Thread(target=lambda: self._radio.export_messages(path),
                              daemon=True).start()
 
+    def _do_nexus(self):
+        """Launch the NEXUS animated analytics dashboard."""
+        from dashboard import NexusDashboard
+        NexusDashboard(self, radio=self._radio)
+
     def _do_info(self):
         info = self._radio.device_info
         if not info:
