@@ -1,8 +1,43 @@
 # MeshCore Node Manager — User Manual
 
-**Version 1.0.0**
+**Version 1.2.0**
 
 ---
+
+## What's new
+
+### v1.2.0
+- **⟷ Bridge Network** — connect geographically separate MeshCore networks
+  over the internet (disabled by default)
+- **Hub server** (`hub/hub.py`) — centralised WebSocket relay; no
+  port-forwarding needed on client machines; live web dashboard
+- **Caddy integration** — automatic TLS/WSS via Let's Encrypt
+- Bug fixes: unread counter data race, sweep_timeouts lock, bridge inject
+  setting, hub feed spam
+
+### v1.1.0 (internal)
+- **⬡ NEXUS analytics dashboard** — animated radar, health orb, RTT
+  sparkline, hop topology, signal waterfall and more
+- **Analytics engine** — link quality scores, network health, RTT trends,
+  hop distribution
+- **Contact features** — notes, favourites, CSV export, double-click to DM
+- **Desktop notifications and sound alerts**
+- **Auto-ping** (Serial keepalive), **auto-reconnect** (TCP)
+- **BLE PIN pairing**
+- **Session log** — auto-saves to `~/.meshcore_nm/sessions/`
+- **Chat-per-contact filter** in Direct tab
+- **Message search** in History tab
+- **GPS network map** tab
+- **Settings tab** — persistent preferences
+- **⟷ Bridge tab** status panel
+
+### v1.0.0
+- Initial release: Serial, TCP, BLE connections
+- Contacts, Channel, Direct, History, Radio, Log tabs
+- ACK tracking, backup/restore, message export
+
+---
+
 
 ## Table of Contents
 
@@ -157,10 +192,10 @@ Download the `.deb` package and install it:
 
 ```bash
 # Download
-wget https://github.com/2E0LXY/meshcore-node-manager/releases/download/v1.0.0/meshcore-node-manager_1.0.0_amd64.deb
+wget https://github.com/2E0LXY/meshcore-node-manager/releases/latest/download/meshcore-node-manager_amd64.deb
 
 # Install
-sudo dpkg -i meshcore-node-manager_1.0.0_amd64.deb
+sudo dpkg -i meshcore-node-manager_*_amd64.deb
 
 # Run
 meshcore-node-manager
@@ -179,7 +214,7 @@ sudo apt remove meshcore-node-manager
 Download the standalone binary:
 
 ```bash
-wget https://github.com/2E0LXY/meshcore-node-manager/releases/download/v1.0.0/meshcore-node-manager-linux-x64
+wget https://github.com/2E0LXY/meshcore-node-manager/releases/latest/download/meshcore-node-manager-linux-x64
 chmod +x meshcore-node-manager-linux-x64
 ./meshcore-node-manager-linux-x64
 ```
@@ -237,7 +272,7 @@ python -m venv venv
 source venv/bin/activate          # Linux / macOS
 # or: venv\Scripts\activate       # Windows
 
-pip install meshcore bleak plyer
+pip install meshcore bleak websockets plyer
 python main.py
 ```
 

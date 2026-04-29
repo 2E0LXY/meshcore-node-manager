@@ -30,7 +30,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install meshcore bleak pyinstaller
+          pip install meshcore bleak websockets pyinstaller
 
       - name: Build EXE
         run: |
@@ -41,6 +41,7 @@ jobs:
             --hidden-import bleak `
             --hidden-import bleak.backends.winrt `
             --hidden-import bleak.backends.winrt.scanner `
+            --hidden-import websockets `
             --collect-submodules meshcore `
             --collect-submodules bleak `
             --noconfirm `
@@ -78,7 +79,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install meshcore bleak pyinstaller
+          pip install meshcore bleak websockets pyinstaller
 
       - name: Build Linux binary
         run: |

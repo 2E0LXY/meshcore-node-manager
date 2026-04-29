@@ -69,7 +69,7 @@ logging.basicConfig(
 log = logging.getLogger("hub")
 
 # ── constants ─────────────────────────────────────────────────────────────────
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 1   # must match BRIDGE_PROTOCOL_VERSION in version.py
 MAX_BRIDGE_HOPS  = 3
 DEDUP_TTL_SECS   = 300
 MAX_FRAME_BYTES  = 65_536

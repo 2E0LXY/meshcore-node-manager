@@ -62,6 +62,7 @@ except ImportError:
     websockets = None
     _WS_OK = False
 
+from version import BRIDGE_PROTOCOL_VERSION
 from events import (
     EventBus,
     EV_MSG_CHANNEL,
@@ -73,7 +74,7 @@ log = logging.getLogger(__name__)
 
 # ── constants ─────────────────────────────────────────────────────────────────
 BRIDGE_DEFAULT_PORT  = 4404
-PROTOCOL_VERSION     = 1
+PROTOCOL_VERSION     = BRIDGE_PROTOCOL_VERSION
 MAX_BRIDGE_HOPS      = 3
 DEDUP_TTL_SECS       = 300      # 5 minutes
 PING_INTERVAL_SECS   = 30

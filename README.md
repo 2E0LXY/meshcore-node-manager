@@ -1,5 +1,7 @@
 # MeshCore Node Manager
 
+[![Release](https://img.shields.io/github/v/release/2E0LXY/meshcore-node-manager?style=flat-square&color=89b4fa&label=release)](https://github.com/2E0LXY/meshcore-node-manager/releases/latest) [![License](https://img.shields.io/badge/licence-MIT-a6e3a1?style=flat-square)](LICENSE) [![Python](https://img.shields.io/badge/python-3.10%2B-cba6f7?style=flat-square)](https://python.org)
+
 A desktop app for **Windows, macOS and Linux** that lets you send and receive
 text messages across a **LoRa mesh radio network** using MeshCore-flashed
 hardware such as the Heltec WiFi LoRa 32 V3 / V4.
@@ -160,7 +162,7 @@ USB + BLE + TCP multi-transport support:
 ```bash
 pip install meshcore bleak websockets
 
-# Optional — desktop notifications
+# Optional — desktop notifications and richer cross-platform alerts
 pip install plyer
 ```
 
@@ -222,7 +224,7 @@ python -m venv venv && venv\Scripts\activate && pip install meshcore bleak && py
 
 1. Flash your Heltec V3 / V4 with dt267 firmware (see
    [recommended firmware](#recommended-firmware))
-2. `pip install meshcore bleak`
+2. `pip install meshcore bleak websockets`
 3. `python main.py`
 4. Click **🔵 BLE** → **🔍 Scan (5 s)** → double-click your node (green row)
 5. The **📡 Contacts** tab populates; the **💬 Channel** tab shows live traffic
