@@ -20,6 +20,17 @@ import math
 import time
 import tkinter as tk
 
+# Analytics — imported at module level (safe: no side effects)
+try:
+    from analytics import (
+        contacts_summary, network_health,
+        rtt_series, hourly_activity,
+        hop_distribution, per_contact_reliability,
+    )
+    _ANALYTICS_OK = True
+except ImportError:
+    _ANALYTICS_OK = False
+
 # ─────────────────────────────────────────────────────────────────────────────
 # NEXUS colour palette — deep space + bioluminescence
 # ─────────────────────────────────────────────────────────────────────────────
@@ -119,7 +130,10 @@ class _Panel(tk.Canvas):
             return
         self._t += self.REFRESH_MS / 1000.0
         self.delete("all")
-        self.draw(self._t)
+        try:
+            self.draw(self._t)
+        except Exception:
+            pass   # Keep animation alive even if one frame fails
         self.after(self.REFRESH_MS, self._loop)
 
     def draw(self, t: float):
@@ -378,8 +392,8 @@ class RTTSparkline(_Panel):
         self._h2 = h
         self._series: list[tuple[float, float]] = []
 
-    def set_data(self, rtt_series: list[tuple[float, float]]):
-        self._series = rtt_series[-self.POINTS:]
+    def set_data(self, series_data: list):
+        self._series = series_data[-self.POINTS:]
 
     def draw(self, t: float):
         w, h = self._w2, self._h2
@@ -980,13 +994,10 @@ class NexusDashboard(tk.Toplevel):
             self._inject_demo_data()
             return
 
+        if not _ANALYTICS_OK:
+            self._status_var.set("⚠  analytics.py not found")
+            return
         try:
-            from analytics import (
-                contacts_summary, network_health,
-                rtt_series, hourly_activity,
-                hop_distribution, per_contact_reliability,
-            )
-
             contacts = self._radio.get_contacts()
             messages = self._radio.message_history()
             stats    = self._radio.live_stats()
@@ -1024,11 +1035,6 @@ class NexusDashboard(tk.Toplevel):
     def _inject_demo_data(self):
         """Feed synthetic data when no radio is connected — for UI preview."""
         import random
-        from analytics import (
-            contacts_summary, network_health,
-            rtt_series, hourly_activity,
-            hop_distribution, per_contact_reliability,
-        )
         from radio import Contact, Message
 
         now = time.time()

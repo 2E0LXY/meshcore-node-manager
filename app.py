@@ -404,6 +404,7 @@ class DirectTab(TabBase):
 
     def _reload_history(self):
         """Rebuild text widget from history for current peer filter."""
+        self.radio.clear_unread_direct()
         msgs = self.radio.message_history(
             kind="direct",
             peer=self._current_peer if self._current_peer else None
@@ -616,6 +617,7 @@ class MapTab(TabBase):
     def __init__(self, parent, radio, bus, root, settings):
         super().__init__(parent, radio, bus, root, settings)
         self._dot_info: list[tuple] = []
+        self._cached_contacts: list = []
         self._build()
         bus.on(EV_CONTACTS_UPD, lambda **_: self.after_tk(self.refresh))
         bus.on(EV_CONNECTED,    lambda **_: self.after_tk(self.refresh))
@@ -640,7 +642,8 @@ class MapTab(TabBase):
     def refresh(self):
         self._canvas.delete("all")
         self._dot_info = []
-        contacts = [c for c in self.radio.get_contacts()
+        self._cached_contacts = self.radio.get_contacts()
+        contacts = [c for c in self._cached_contacts
                     if c.lat is not None and c.lon is not None]
 
         if not contacts:
@@ -716,7 +719,7 @@ class MapTab(TabBase):
         for cx, cy, _name, key in self._dot_info:
             dist = ((event.x - cx) ** 2 + (event.y - cy) ** 2) ** 0.5
             if dist <= self.RADIUS + 4:
-                c_list = [c for c in self.radio.get_contacts() if c.key == key]
+                c_list = [c for c in self._cached_contacts if c.key == key]
                 if c_list:
                     c = c_list[0]
                     tip = (f"{c.name}  ({c.lat:.4f}, {c.lon:.4f})\n"
@@ -811,7 +814,7 @@ class SettingsTab(TabBase):
         for key, var in self._vars.items():
             raw = var.get()
             # Coerce int fields
-            if key in ("auto_ping_interval", "reconnect_max", "last_tcp_port"):
+            if key in ("auto_ping_interval", "reconnect_max"):
                 try:
                     raw = int(raw)
                 except (ValueError, TypeError):

@@ -843,10 +843,11 @@ class NodeRadio:
         if not enabled:
             return
         try:
-            fname = time.strftime(f"session_{self.node_name}_%Y%m%d_%H%M%S.txt")
-            # Sanitise filename
-            fname = "".join(c if c.isalnum() or c in "._- " else "_"
-                            for c in fname)
+            # Sanitise node_name BEFORE strftime to prevent % format codes
+            safe_name = "".join(
+                c if c.isalnum() or c in "._- " else "_"
+                for c in self.node_name)
+            fname = time.strftime(f"session_{safe_name}_%Y%m%d_%H%M%S.txt")
             path = os.path.join(SESSION_LOG_DIR, fname)
             self._session_fh = open(path, "w", encoding="utf-8")
             self._session_fh.write(
