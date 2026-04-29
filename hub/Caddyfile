@@ -1,0 +1,40 @@
+# Caddyfile — MeshCore Bridge Hub
+# Replace yourdomain.com with your actual domain.
+# Caddy auto-provisions TLS via Let's Encrypt (requires ports 80 + 443 open).
+#
+# Install Caddy: https://caddyserver.com/docs/install
+# Run:  caddy run --config Caddyfile
+
+yourdomain.com {
+
+    # Dashboard web UI  →  http://localhost:9001
+    handle / {
+        reverse_proxy localhost:9001
+    }
+
+    # Dashboard WebSocket feed  →  ws://localhost:9002
+    handle /dash {
+        reverse_proxy localhost:9002 {
+            header_up Host {host}
+            header_up Upgrade {http.upgrade}
+            header_up Connection {http.connection}
+        }
+    }
+
+    # Bridge relay WebSocket  →  ws://localhost:9000
+    # Node Manager peers connect to:  wss://yourdomain.com/hub
+    handle /hub {
+        reverse_proxy localhost:9000 {
+            header_up Host {host}
+            header_up Upgrade {http.upgrade}
+            header_up Connection {http.connection}
+        }
+    }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+    }
+}

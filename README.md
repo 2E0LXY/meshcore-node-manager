@@ -60,6 +60,17 @@ Range is typically **2–15 km line of sight** depending on hardware and antenna
 | **Auto-reconnect** | Periodic ACK timeout sweep; status bar shows pending count |
 | **Dark theme** | Catppuccin Mocha palette throughout |
 | **Clean shutdown** | Graceful disconnect and loop teardown on window close |
+| **⟷ Bridge tab** | Connect geographically separate networks over the internet |
+| **⬡ NEXUS dashboard** | Animated real-time analytics HUD — radar, health orb, RTT sparkline, hop topology, signal waterfall |
+| **⚙ Settings tab** | Persistent preferences: notifications, auto-ping, auto-reconnect, BLE PIN, bridge, session log |
+| **Session log** | Auto-saves every session to `~/.meshcore_nm/sessions/` |
+| **Contact notes** | Per-contact private annotations stored locally |
+| **Contact favourites** | Star contacts; float to top; persisted between sessions |
+| **Contact CSV export** | Export full contact list with notes to CSV |
+| **Desktop notifications** | System alerts and sound on incoming DM or channel message |
+| **Auto-ping (Serial)** | Prevents dt267 30-second idle disconnect |
+| **Auto-reconnect (TCP)** | Reconnects automatically when TCP drops |
+| **BLE PIN pairing** | Secure BLE connection with shared PIN |
 
 ---
 
@@ -67,16 +78,28 @@ Range is typically **2–15 km line of sight** depending on hardware and antenna
 
 ```
 main.py
-  └── AppWindow (app.py)           Tkinter root window
-        ├── NodeRadio (radio.py)   All device I/O, async loop in daemon thread
-        ├── EventBus (events.py)   Pub/sub decoupling layer
+  └── AppWindow (app.py)              Tkinter root window
+        ├── NodeRadio (radio.py)      All device I/O, async loop in daemon thread
+        ├── Bridge (bridge.py)        Internet bridge — WebSocket relay (off by default)
+        ├── EventBus (events.py)      Pub/sub decoupling layer
+        ├── Analytics (analytics.py)  Derived metrics (link quality, RTT, health score)
         └── Tabs (app.py)
-              ├── ContactsTab      Contacts list
-              ├── ChannelTab       Broadcast chat
-              ├── DirectTab        DM chat + ACK tracking
-              ├── HistoryTab       Message log + stats
-              ├── RadioTab         Radio params + live stats
-              └── LogTab           Application log
+              ├── ContactsTab         Contacts list with notes, favourites, CSV export
+              ├── ChannelTab          Broadcast chat
+              ├── DirectTab           DM chat + ACK + chat-per-contact filter
+              ├── HistoryTab          Searchable message log + stats
+              ├── MapTab              GPS network map
+              ├── RadioTab            Radio params + live device stats
+              ├── BridgeTab           Bridge status and peer list
+              ├── SettingsTab         Persistent settings
+              └── LogTab              Application log
+
+hub/hub.py                            Centralised relay hub (run on a server)
+  ├── WebSocket relay (:9000)         All clients connect here — no port-forward needed
+  ├── Dashboard HTTP  (:9001)         Live web UI showing connected clients + feed
+  └── Dashboard WS    (:9002)         Real-time data stream for the dashboard
+
+hub/Caddyfile                         Caddy reverse proxy — automatic TLS/WSS
 ```
 
 **Design principles**
@@ -135,13 +158,17 @@ USB + BLE + TCP multi-transport support:
   - Windows: included in the official Python installer
 
 ```bash
-pip install meshcore bleak
+pip install meshcore bleak websockets
+
+# Optional — desktop notifications
+pip install plyer
 ```
 
 | Package | Purpose | Min version |
 |---|---|---|
 | `meshcore` | Official MeshCore Python companion library | latest |
 | `bleak` | Cross-platform Bluetooth Low Energy | 0.21+ |
+| `websockets` | Bridge and hub networking | 13.0+ |
 
 ### BLE platform notes
 
@@ -403,6 +430,38 @@ Colour-coded application log showing every event.
 
 ---
 
+## Bridge Network
+
+Connect geographically separate MeshCore networks over the internet so that
+channel messages and contact telemetry flow between them automatically.
+**Disabled by default.**
+
+### ⟷ Bridge tab
+
+Shows whether the bridge is running and lists all currently connected peers.
+Remote contacts appear prefixed with ⟷ in the Contacts and Map tabs.
+Bridged channel messages are prefixed with `[ORIGIN-NODE]`.
+
+Direct messages (DMs) are **never bridged** — they remain private.
+
+### Setting up peer-to-peer (two locations)
+
+See the full guide in [§ Bridge Network](#bridge-network) of the
+[User Manual](docs/USER_MANUAL.md).
+
+### Setting up with the hub (recommended — no port-forwarding)
+
+See **[hub/README.md](hub/README.md)** for the 5-minute server setup guide.
+
+Once the hub is running at `wss://yourdomain.com/hub`, each Node Manager
+instance just needs:
+
+1. ⚙ Settings → Bridge Network → tick **Enable bridge**
+2. Peers box: `wss://yourdomain.com/hub`
+3. Enter shared secret → 💾 Save
+
+---
+
 ## Toolbar reference
 
 | Button | Action |
@@ -416,6 +475,7 @@ Colour-coded application log showing every event.
 | **💾 Backup** | Save device info + radio params to a JSON file |
 | **📂 Load Backup** | Open a JSON backup and display its contents |
 | **📝 Export Msgs** | Save full message history to a plain-text file |
+| **⬡ NEXUS** | Open the animated analytics dashboard |
 | **ℹ Info** | Show the raw device info payload in a popup |
 
 ---
@@ -478,14 +538,30 @@ application. It works on dt267 v1.13+ and meshcomod firmware. If you see
 
 ```
 meshcore-node-manager/
-├── main.py      Entry point — instantiates and runs AppWindow
-├── app.py       AppWindow (main Tk window), all 6 tabs, 2 dialogs
-├── radio.py     NodeRadio — device connection, contacts, messaging, ACK
-├── events.py    EventBus — decouples the radio layer from the GUI
-├── config.py    Constants: ports, timeouts, Catppuccin Mocha theme tokens
-├── helpers.py   Pure utility functions (timestamps, formatting, keys)
-├── README.md    This file
-└── LICENSE      MIT licence
+├── main.py          Entry point
+├── app.py           AppWindow — 9 tabs, dialogs, toolbar, bridge wiring
+├── radio.py         NodeRadio — device connection, contacts, messaging, ACK
+├── bridge.py        Bridge — internet relay between multiple Node Managers
+├── analytics.py     Analytics engine — link quality, RTT, health scores
+├── dashboard.py     NEXUS HUD — animated canvas analytics dashboard
+├── events.py        EventBus — pub/sub decoupling
+├── config.py        Constants and Catppuccin Mocha theme tokens
+├── helpers.py       Pure utility functions
+├── settings.py      Persistent settings (~/.meshcore_nm/settings.json)
+├── notify.py        Desktop notifications and sound alerts
+├── docs/
+│   └── USER_MANUAL.md    Full user manual
+├── hub/
+│   ├── hub.py            Centralised bridge relay hub
+│   ├── Caddyfile         Caddy reverse proxy config (automatic TLS)
+│   ├── hub.service       systemd service file
+│   ├── requirements.txt  Hub dependencies
+│   └── README.md         Hub setup guide
+├── .github/
+│   └── workflows/
+│       └── build-release.yml   CI/CD — builds EXE + .deb on every version tag
+├── README.md        This file
+└── LICENSE          MIT licence
 ```
 
 ### Module responsibilities
@@ -534,9 +610,12 @@ wiring.
 3. Make your changes
 4. Run the quality checks — all three must be clean before submitting:
    ```bash
-   python3 -m py_compile config.py helpers.py events.py radio.py app.py main.py
-   python3 -m pyflakes   config.py helpers.py events.py radio.py app.py main.py
-   python3 -m pylint     config.py helpers.py events.py radio.py app.py main.py \
+   python3 -m py_compile config.py helpers.py events.py settings.py \
+       notify.py radio.py bridge.py app.py main.py analytics.py dashboard.py
+   python3 -m pyflakes   config.py helpers.py events.py settings.py \
+       notify.py radio.py bridge.py app.py main.py analytics.py dashboard.py
+   python3 -m pylint     config.py helpers.py events.py settings.py \
+       notify.py radio.py bridge.py app.py main.py analytics.py dashboard.py \
        --disable=C,R,W0718 --score=no
    ```
 5. Commit: `git commit -m "Add my feature"`
@@ -608,3 +687,5 @@ choices.
 | **meshcomod firmware** | See repo | https://github.com/ALLFATHER-BV/meshcomod |
 | **bleak** (BLE library) | MIT | https://github.com/hbldh/bleak |
 | **Catppuccin Mocha** (colour palette) | MIT | https://github.com/catppuccin/catppuccin |
+| **websockets** (bridge / hub) | BSD-3 | https://github.com/python-websockets/websockets |
+| **plyer** (notifications, optional) | MIT | https://github.com/kivy/plyer |

@@ -52,7 +52,14 @@
 15. [Analytics Explained](#15-analytics-explained)
 16. [Troubleshooting](#16-troubleshooting)
 17. [Frequently Asked Questions](#17-frequently-asked-questions)
-18. [Glossary](#18-glossary)
+18. [Bridge Network — Detailed Guide](#18-bridge-network--detailed-guide)
+    - [How it works](#181-how-it-works)
+    - [Peer-to-peer setup](#182-peer-to-peer-setup)
+    - [Hub setup (recommended)](#183-hub-setup-recommended)
+    - [Hub web dashboard](#184-hub-web-dashboard)
+    - [Security](#185-security)
+    - [Running the hub as a service](#186-running-the-hub-as-a-service)
+19. [Glossary](#19-glossary)
 
 ---
 
@@ -1307,7 +1314,215 @@ saving it.
 
 ---
 
-## 18. Glossary
+## 18. Bridge Network — Detailed Guide
+
+The Bridge Network feature connects geographically separate MeshCore
+networks over the internet so that messages and contact telemetry flow
+between them automatically — extending the effective mesh range across
+any distance.
+
+**Key facts:**
+- Disabled by default — must be explicitly enabled in ⚙ Settings
+- Channel messages are bridged; **direct messages are never bridged**
+- Remote contacts appear with a ⟷ prefix to distinguish them from local ones
+- Bridged channel messages show `[ORIGIN-NODE]` to identify their source network
+
+---
+
+### 18.1 How it works
+
+```
+Cornwall ──────► Bridge ──────► internet ──────► Bridge ◄────── London
+  radio                         (WSS/TLS)                         radio
+```
+
+Each Node Manager instance with bridging enabled:
+1. Connects as a WebSocket client to either a peer or the hub
+2. Listens for channel messages from the local radio
+3. Forwards them to all connected peers
+4. Receives channel messages from peers and injects them onto the local LoRa channel
+5. Periodically broadcasts local contact telemetry (GPS, RSSI, battery) to peers
+
+**Loop prevention:** every bridged message has a UUID that is cached for
+5 minutes. A message that arrives back at its origin is silently dropped.
+Messages passing through more than 3 bridges are also dropped.
+
+---
+
+### 18.2 Peer-to-peer setup
+
+Use this when you have exactly two locations and one of them has a
+publicly reachable IP address (or can port-forward).
+
+**Location A — the server side (needs a public IP or port-forward)**
+
+1. Open ⚙ Settings → Bridge Network
+2. Tick **Enable bridge**
+3. Tick **Run as bridge server**
+4. Set port (default 4404) — open this port in your firewall / router
+5. Set a shared secret (e.g. `openssl rand -hex 16`)
+6. Click 💾 Save settings
+
+**Location B — the client side**
+
+1. Open ⚙ Settings → Bridge Network
+2. Tick **Enable bridge** only
+3. In the Peers box enter: `ws://LOCATION_A_IP:4404`
+   (or `wss://` if TLS is terminated by a reverse proxy)
+4. Enter the same shared secret
+5. Click 💾 Save settings
+
+Both instances will connect, exchange a HELLO handshake, and begin relaying.
+The **⟷ Bridge** tab confirms the connection and shows the peer name.
+
+---
+
+### 18.3 Hub setup (recommended)
+
+The hub eliminates the need for port-forwarding on any client machine.
+All instances connect outward to the hub as WebSocket clients.
+
+**Requirements:**
+- A VPS or server with a public IP address
+- A domain name pointing to that IP
+- Ports 80 and 443 open on the server firewall
+
+**Quick setup (5 minutes):**
+
+```bash
+# 1. On your server — clone the repo and set up the hub
+git clone https://github.com/2E0LXY/meshcore-node-manager.git
+cd meshcore-node-manager/hub
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+
+# 2. Install Caddy (Debian/Ubuntu)
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
+curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key \
+  | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt \
+  | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update && sudo apt install caddy
+
+# 3. Edit Caddyfile — replace yourdomain.com with your domain
+nano Caddyfile
+
+# 4. Start the hub (with a secret)
+HUB_SECRET=your-secret-here python hub.py &
+
+# 5. Start Caddy
+caddy run --config Caddyfile
+```
+
+**Each Node Manager client:**
+
+1. ⚙ Settings → Bridge Network
+2. Tick **Enable bridge**
+3. Peers box: `wss://yourdomain.com/hub`
+4. Shared secret: same value as `HUB_SECRET` on the server
+5. 💾 Save settings
+
+The bridge starts automatically on the next radio connection.
+
+**Hub ports (all internal — Caddy proxies them):**
+
+| Port | Purpose |
+|---|---|
+| 9000 | WebSocket relay — clients connect here via Caddy |
+| 9001 | Dashboard HTTP — serves the web UI |
+| 9002 | Dashboard WebSocket — live data feed for the web UI |
+
+Only ports 80 and 443 need to be open on the server.
+
+---
+
+### 18.4 Hub web dashboard
+
+The hub serves a live web dashboard at `https://yourdomain.com`.
+
+**Dashboard panels:**
+
+| Panel | Shows |
+|---|---|
+| **Statistics row** | Connected clients, total frames received, relayed, dropped, uptime |
+| **Connected Clients** | Node name, IP address, time connected, frames sent/received, last activity |
+| **Live Frame Feed** | Every frame relayed through the hub in real time: timestamp, direction (←/→), frame type, message text |
+
+**Frame types in the feed:**
+
+| Type | Colour | Meaning |
+|---|---|---|
+| `hello` | Yellow | Client connected or reconnected |
+| `channel_msg` | Green | Channel message relayed |
+| `contact_upd` | Cyan | Contact telemetry (GPS, RSSI, battery) |
+| `disconnect` | Red | Client disconnected |
+
+The dashboard auto-reconnects if the browser loses connection to the hub.
+
+---
+
+### 18.5 Security
+
+The shared secret is required in every WebSocket frame. Clients that send
+a wrong or missing secret are disconnected immediately during the HELLO
+handshake.
+
+**Recommendations:**
+
+- Generate a strong secret: `openssl rand -hex 32`
+- Store it in `/etc/meshcore-hub.env` on the server (not in the command line)
+- The dashboard has no login — if you want to restrict access, add Caddy
+  `basicauth` to the `/` and `/dash` routes in the Caddyfile:
+  ```
+  basicauth {
+      admin $2a$14$hashedpassword
+  }
+  ```
+  Generate the hash: `caddy hash-password`
+- For zero-trust deployments, put the entire hub behind a VPN
+  (WireGuard or Tailscale) and remove public exposure
+
+---
+
+### 18.6 Running the hub as a service
+
+To keep the hub running after reboot, install it as a systemd service:
+
+```bash
+# Create a dedicated user
+sudo useradd -r -s /sbin/nologin -d /opt/meshcore-hub meshcore
+sudo mkdir -p /opt/meshcore-hub
+sudo cp -r /path/to/repo/hub/. /opt/meshcore-hub/
+sudo chown -R meshcore:meshcore /opt/meshcore-hub
+
+# Create the virtual environment
+sudo -u meshcore bash -c "cd /opt/meshcore-hub && python3 -m venv venv && venv/bin/pip install -r requirements.txt"
+
+# Set the secret
+echo "HUB_SECRET=your-secret-here" | sudo tee /etc/meshcore-hub.env
+sudo chmod 600 /etc/meshcore-hub.env
+
+# Install the service
+sudo cp /opt/meshcore-hub/hub.service /etc/systemd/system/meshcore-hub.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now meshcore-hub
+
+# Check it's running
+sudo systemctl status meshcore-hub
+sudo journalctl -u meshcore-hub -f
+```
+
+To update the hub:
+```bash
+cd /path/to/repo && git pull
+sudo cp hub/hub.py /opt/meshcore-hub/
+sudo systemctl restart meshcore-hub
+```
+
+---
+
+
+## 19. Glossary
 
 | Term | Definition |
 |---|---|
@@ -1341,3 +1556,10 @@ saving it.
 | **TCP** | Transmission Control Protocol — used for the WiFi connection between the app and node |
 | **TerminalCLI** | A special channel name that enables command-line control of the node over the radio |
 | **TX Power** | Transmit power — how strong the radio signal is when transmitted, in dBm |
+| **Bridge** | The software feature that connects separate MeshCore networks over the internet |
+| **Hub** | The centralised WebSocket relay server that bridge clients connect to |
+| **WSS** | WebSocket Secure — WebSocket protocol over TLS, analogous to HTTPS |
+| **Caddy** | A modern web server that handles automatic TLS certificate provisioning |
+| **Peer** | Another Node Manager instance connected to the same bridge or hub |
+| **NEXUS** | The animated analytics dashboard built into the application |
+| **Session log** | An automatic plain-text log file created for each radio connection session |
