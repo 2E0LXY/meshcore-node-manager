@@ -36,6 +36,15 @@ _DEFAULTS: dict = {
 
     # UI
     "window_geometry": "1160x820",
+
+    # bridge (all off by default)
+    "bridge_enabled":        False,  # master switch
+    "bridge_server_enabled": False,  # run a WebSocket server
+    "bridge_port":           4404,   # server listen port
+    "bridge_peers":          [],     # list of ws://host:port URIs to connect to
+    "bridge_secret":         "",     # shared secret (empty = no auth)
+    "bridge_relay_contacts": True,   # relay contact telemetry to peers
+    "bridge_inject_radio":   True,   # inject bridged messages onto local LoRa
 }
 
 

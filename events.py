@@ -65,3 +65,4 @@ EV_UNREAD_CHANGE  = "unread_change"   # kwargs: direct (int), channel (int)
 EV_NOTE_UPD       = "note_upd"        # kwargs: key (str)
 EV_SETTINGS_UPD   = "settings_upd"   # kwargs: (none)
 EV_LOG            = "log"             # kwargs: text, level
+EV_BRIDGE_STATUS  = "bridge_status"  # kwargs: peers (list[str]), running (bool)

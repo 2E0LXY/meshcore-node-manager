@@ -12,6 +12,11 @@ ACK_TIMEOUT_SECS    = 30
 HISTORY_LIMIT       = 500
 LORA_MAX_CHARS      = 228           # practical LoRa payload limit for text frames
 
+# ── bridge ───────────────────────────────────────────────────────────────────
+BRIDGE_DEFAULT_PORT  = 4404      # WebSocket port for bridge server
+BRIDGE_MAX_HOPS      = 3         # max bridge relay hops before drop
+BRIDGE_DEDUP_TTL     = 300       # seconds to remember seen message IDs
+
 # ── auto-ping / reconnect ─────────────────────────────────────────────────────
 AUTO_PING_INTERVAL  = 20            # seconds between keepalive pings on Serial
 RECONNECT_DELAY     = 5             # seconds before auto-reconnect attempt

@@ -171,6 +171,14 @@ class NodeRadio:
         """Clear stored connection factory (prevents auto-reconnect)."""
         self._conn_factory = None
 
+    def upsert_contact(self, contact: "Contact") -> None:
+        """
+        Insert or update a contact in the local cache.
+        Used by the bridge to add remote contacts.
+        """
+        with self._ct_lock:
+            self._contacts[contact.key] = contact
+
     @property
     def unread_direct(self) -> int:
         return self._unread_direct

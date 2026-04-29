@@ -17,9 +17,10 @@ from events import (
     EV_MSG_CHANNEL, EV_MSG_DIRECT, EV_MSG_SENT,
     EV_MSG_DELIVERED, EV_MSG_TIMEOUT,
     EV_UNREAD_CHANGE, EV_NOTE_UPD, EV_SETTINGS_UPD,
-    EV_LOG,
+    EV_LOG, EV_BRIDGE_STATUS,
 )
 from helpers import ts_to_hms, fmt_rtt, safe_str
+from bridge import Bridge
 from notify import desktop_notify, play_alert
 from radio import NodeRadio
 from settings import Settings
@@ -735,6 +736,94 @@ class MapTab(TabBase):
         self._lbl.config(text="")
 
 
+
+# ════════════════════════════════════════════════════════════════════════════
+# Tab: Bridge
+# ════════════════════════════════════════════════════════════════════════════
+
+class BridgeTab(TabBase):
+    """
+    Shows bridge status and live peer list.
+    Configuration is done in the Settings tab.
+    """
+
+    def __init__(self, parent, radio, bus, root, settings):
+        super().__init__(parent, radio, bus, root, settings)
+        self._build()
+        bus.on(EV_BRIDGE_STATUS,
+               lambda **kw: self.after_tk(self._update, kw))
+        bus.on(EV_DISCONNECTED, lambda **_: self.after_tk(self._on_radio_offline))
+
+    def _build(self):
+        top = ttk.Frame(self)
+        top.pack(fill="x", padx=10, pady=10)
+
+        # Status indicator
+        self._status_var = tk.StringVar(value="⚫  Bridge DISABLED")
+        ttk.Label(top, textvariable=self._status_var,
+                  font=("Consolas", 12, "bold")).pack(anchor="w")
+
+        self._peer_count_var = tk.StringVar(value="")
+        ttk.Label(top, textvariable=self._peer_count_var,
+                  foreground=C["info"]).pack(anchor="w", pady=2)
+
+        ttk.Separator(self, orient="horizontal").pack(fill="x", padx=10, pady=6)
+
+        # Peer list
+        ttk.Label(self, text="Connected peers:",
+                  foreground=C["fg2"]).pack(anchor="w", padx=10)
+        self._peer_box = tk.Text(self, height=8, width=50,
+                                  bg=C["bg2"], fg=C["ok"],
+                                  font=("Consolas", 9),
+                                  state="disabled", relief="flat")
+        self._peer_box.pack(fill="x", padx=10, pady=4)
+
+        ttk.Separator(self, orient="horizontal").pack(fill="x", padx=10, pady=6)
+
+        # Info / quick guide
+        guide = (
+            "The Bridge connects separate MeshCore networks over the internet.\n\n"
+            "  \u2022 Channel messages from your local network are forwarded to\n"
+            "    all connected peer bridges, and vice versa.\n\n"
+            "  \u2022 Contact telemetry (GPS, signal strength, battery) from\n"
+            "    remote networks appears on your Contacts and Map tabs.\n"
+            "    Remote contacts are prefixed with \u27f7 to distinguish them.\n\n"
+            "  \u2022 Direct messages are NEVER bridged \u2014 they stay private.\n\n"
+            "To configure: go to \u2699 Settings \u2192 Bridge Network."
+        )
+        ttk.Label(self, text=guide, foreground=C["muted"],
+                  justify="left", font=("", 9)).pack(anchor="w", padx=12)
+
+    def _update(self, kw: dict):
+        running = kw.get("running", False)
+        peers   = kw.get("peers", [])
+        n       = len(peers)
+
+        if running:
+            self._status_var.set("🟢  Bridge ACTIVE")
+            self._peer_count_var.set(
+                f"{n} peer(s) connected" if n
+                else "No peers connected — waiting…")
+        else:
+            self._status_var.set("⚫  Bridge DISABLED")
+            self._peer_count_var.set("")
+
+        self._peer_box.configure(state="normal")
+        self._peer_box.delete("1.0", "end")
+        if peers:
+            for p in peers:
+                self._peer_box.insert("end", f"  ⟷ {p}\n")
+        else:
+            self._peer_box.insert("end",
+                "  (none)\n" if running else "  Bridge is disabled.\n")
+        self._peer_box.configure(state="disabled")
+
+    def _on_radio_offline(self):
+        if not self.settings.get("bridge_enabled", False):
+            self._update({"running": False, "peers": []})
+
+
+
 # ════════════════════════════════════════════════════════════════════════════
 # Tab: Settings
 # ════════════════════════════════════════════════════════════════════════════
@@ -806,6 +895,39 @@ class SettingsTab(TabBase):
                         "  then enter the matching PIN here before connecting."),
                   foreground=C["muted"], font=("", 8)).pack(anchor="w", padx=10)
 
+
+        # ── Bridge Network ────────────────────────────────────────────────
+        brf = section("Bridge Network  (disabled by default)")
+        check(brf, "bridge_enabled",
+              "Enable bridge (requires restart of bridge after saving)")
+        check(brf, "bridge_server_enabled",
+              "Run as bridge server (others can connect to you)")
+        entry_row(brf, "bridge_port",
+                  "Server port (default 4404):", width=8)
+        ttk.Label(brf,
+                  text=("  Peers — one ws://host:port per line:"),
+                  foreground=C["fg2"]).pack(anchor="w", padx=10, pady=(6, 0))
+        self._peers_txt = tk.Text(brf, height=4, width=38,
+                                   bg=C["entry"], fg=C["fg"],
+                                   font=("Consolas", 9),
+                                   insertbackground=C["fg"])
+        self._peers_txt.pack(padx=10, pady=4)
+        # Pre-fill peers text box from settings
+        existing = self.settings.get("bridge_peers", [])
+        self._peers_txt.insert("1.0", "\n".join(existing))
+
+        entry_row(brf, "bridge_secret",
+                  "Shared secret (optional):", width=20)
+        check(brf, "bridge_relay_contacts",
+              "Relay contact telemetry (GPS, RSSI, battery) to peers")
+        check(brf, "bridge_inject_radio",
+              "Inject bridged messages onto local LoRa channel")
+        ttk.Label(brf,
+                  text=("  Security: shared secret is stored in plaintext.\n"
+                        "  For sensitive use, run behind a VPN (WireGuard/Tailscale)."),
+                  foreground=C["muted"], font=("", 8)
+                  ).pack(anchor="w", padx=10, pady=(2, 6))
+
         ttk.Button(outer, text="💾 Save settings", command=self._save).pack(pady=8)
         self._status = ttk.Label(outer, foreground=C["ok"])
         self._status.pack()
@@ -820,6 +942,11 @@ class SettingsTab(TabBase):
                 except (ValueError, TypeError):
                     raw = self.settings.get(key)
             self.settings.set(key, raw)
+        # Save bridge peers from text box
+        if hasattr(self, '_peers_txt'):
+            raw_peers = self._peers_txt.get("1.0", "end").strip()
+            peers = [p.strip() for p in raw_peers.splitlines() if p.strip()]
+            self.settings.set("bridge_peers", peers)
         if self.settings.save():
             self._status.config(text="✅ Saved")
             self.after_tk(lambda: self._status.config(text=""), 2000)
@@ -1064,6 +1191,9 @@ class AppWindow(tk.Tk):
         self._radio = NodeRadio(self._bus)
         self._radio.settings = self._settings
 
+        self._bridge = Bridge(self._bus, self._settings)
+        self._bridge.set_radio(self._radio)
+
         # reconnect state
         self._reconnect_pending  = False
         self._reconnect_due_time = 0.0
@@ -1166,6 +1296,7 @@ class AppWindow(tk.Tk):
             (HistoryTab,  "📊 History"),
             (MapTab,      "🗺 Map"),
             (RadioTab,    "📻 Radio"),
+            (BridgeTab,   "⟷ Bridge"),
             (SettingsTab, "⚙ Settings"),
             (LogTab,      "📋 Log"),
         ]
@@ -1221,7 +1352,13 @@ class AppWindow(tk.Tk):
         else:
             self._status_v.set("⚫ Offline")
         p = self._radio.pending_count()
-        self._pending_v.set(f"⏳ {p} pending" if p else "")
+        b = self._bridge.peer_count() if self._bridge.is_running else 0
+        parts = []
+        if p:
+            parts.append(f"⏳ {p} pending")
+        if b:
+            parts.append(f"⟷ {b} bridge peer(s)")
+        self._pending_v.set("  ".join(parts))
 
     # ── bus wiring ────────────────────────────────────────────────────────────
 
@@ -1239,6 +1376,8 @@ class AppWindow(tk.Tk):
                      lambda **kw: self.after(0, lambda: self._update_tab_badge(
                          kw.get("direct", 0), kw.get("channel", 0))))
         self._bus.on(EV_SETTINGS_UPD,
+                     lambda **_: self.after(0, self._apply_bridge_settings))
+        self._bus.on(EV_BRIDGE_STATUS,
                      lambda **_: self.after(0, self._update_statusbar))
 
     def _on_connected(self):
@@ -1246,6 +1385,9 @@ class AppWindow(tk.Tk):
         self._update_statusbar()
         self._tabs["📡 Contacts"].refresh()
         self._tabs["📻 Radio"].refresh_params()
+        self._bridge.set_radio(self._radio)
+        if self._settings.get("bridge_enabled", False) and not self._bridge.is_running:
+            threading.Thread(target=self._bridge.start, daemon=True).start()
 
     def _on_disconnected(self):
         self._update_statusbar()
@@ -1254,6 +1396,16 @@ class AppWindow(tk.Tk):
                 self._radio.has_conn_factory):
             self._reconnect_pending  = True
             self._reconnect_due_time = time.time() + RECONNECT_DELAY
+
+    def _apply_bridge_settings(self):
+        """Start or stop the bridge based on current settings."""
+        self._update_statusbar()
+        enabled = self._settings.get("bridge_enabled", False)
+        if enabled and not self._bridge.is_running:
+            self._bridge.set_radio(self._radio)
+            threading.Thread(target=self._bridge.start, daemon=True).start()
+        elif not enabled and self._bridge.is_running:
+            threading.Thread(target=self._bridge.stop, daemon=True).start()
 
     # ── toolbar actions ───────────────────────────────────────────────────────
 
@@ -1394,6 +1546,8 @@ class AppWindow(tk.Tk):
             self._settings.save()
         except Exception:
             pass
+        if self._bridge.is_running:
+            self._bridge.stop()
         if self._radio.online:
             self._radio.disconnect()
         self.destroy()
