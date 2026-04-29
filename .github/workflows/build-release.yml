@@ -1,0 +1,243 @@
+# .github/workflows/build-release.yml
+# Builds standalone executables for Windows (.exe) and Linux (.deb + binary)
+# Triggered by pushing a version tag:  git tag v1.0.0 && git push origin v1.0.0
+
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+
+  # ── Windows .exe ────────────────────────────────────────────────────────────
+  build-windows:
+    name: Windows EXE
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install meshcore bleak pyinstaller
+
+      - name: Build EXE
+        run: |
+          pyinstaller `
+            --onefile `
+            --name "meshcore-node-manager" `
+            --hidden-import meshcore `
+            --hidden-import bleak `
+            --hidden-import bleak.backends.winrt `
+            --hidden-import bleak.backends.winrt.scanner `
+            --collect-submodules meshcore `
+            --collect-submodules bleak `
+            --noconfirm `
+            --clean `
+            main.py
+
+      - name: Rename artifact
+        run: |
+          move dist\meshcore-node-manager.exe dist\meshcore-node-manager-windows-x64.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/meshcore-node-manager-windows-x64.exe
+
+  # ── Linux binary + .deb ─────────────────────────────────────────────────────
+  build-linux:
+    name: Linux Binary + DEB
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y python3-tk dpkg-dev
+
+      - name: Install Python dependencies
+        run: |
+          pip install meshcore bleak pyinstaller
+
+      - name: Build Linux binary
+        run: |
+          pyinstaller \
+            --onefile \
+            --name "meshcore-node-manager" \
+            --hidden-import meshcore \
+            --hidden-import bleak \
+            --hidden-import bleak.backends.bluezdbus \
+            --collect-submodules meshcore \
+            --collect-submodules bleak \
+            --noconfirm \
+            --clean \
+            main.py
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Build .deb package
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          PKG="meshcore-node-manager_${VERSION}_amd64"
+          mkdir -p "${PKG}/DEBIAN"
+          mkdir -p "${PKG}/usr/bin"
+          mkdir -p "${PKG}/usr/share/applications"
+          mkdir -p "${PKG}/usr/share/doc/meshcore-node-manager"
+
+          # Binary
+          cp dist/meshcore-node-manager "${PKG}/usr/bin/meshcore-node-manager"
+          chmod 755 "${PKG}/usr/bin/meshcore-node-manager"
+
+          # Control file
+          cat > "${PKG}/DEBIAN/control" << CTRL
+          Package: meshcore-node-manager
+          Version: ${VERSION}
+          Section: net
+          Priority: optional
+          Architecture: amd64
+          Depends: python3-tk
+          Maintainer: 2E0LXY <github.com/2E0LXY>
+          Description: MeshCore Node Manager
+           Desktop app for LoRa mesh radio networks using MeshCore firmware.
+           Connect via USB, WiFi or Bluetooth to send messages, monitor nodes,
+           view GPS positions, and track signal quality.
+          CTRL
+
+          # Desktop entry
+          cat > "${PKG}/usr/share/applications/meshcore-node-manager.desktop" << DESKTOP
+          [Desktop Entry]
+          Name=MeshCore Node Manager
+          Comment=LoRa mesh radio network management
+          Exec=/usr/bin/meshcore-node-manager
+          Icon=network-wireless
+          Terminal=false
+          Type=Application
+          Categories=Network;HamRadio;
+          DESKTOP
+
+          # Docs
+          cp README.md "${PKG}/usr/share/doc/meshcore-node-manager/"
+          cp LICENSE   "${PKG}/usr/share/doc/meshcore-node-manager/"
+          gzip -9 -c LICENSE > "${PKG}/usr/share/doc/meshcore-node-manager/copyright.gz"
+
+          dpkg-deb --build --root-owner-group "${PKG}"
+          mv "${PKG}.deb" "dist/meshcore-node-manager_${VERSION}_amd64.deb"
+
+      - name: Rename binary artifact
+        run: |
+          mv dist/meshcore-node-manager dist/meshcore-node-manager-linux-x64
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-binary
+          path: dist/meshcore-node-manager-linux-x64
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb
+          path: dist/meshcore-node-manager_*_amd64.deb
+
+  # ── GitHub Release ───────────────────────────────────────────────────────────
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-linux]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Create release notes
+        id: notes
+        run: |
+          cat > release_notes.md << 'NOTES'
+          ## MeshCore Node Manager ${{ github.ref_name }}
+
+          Desktop app for LoRa mesh radio networks using MeshCore firmware.
+          Connect via USB serial, TCP/WiFi or Bluetooth BLE.
+
+          ### Downloads
+
+          | Platform | File | Notes |
+          |---|---|---|
+          | **Windows 10/11** | `meshcore-node-manager-windows-x64.exe` | Standalone — no Python needed |
+          | **Linux (Debian/Ubuntu)** | `meshcore-node-manager_*_amd64.deb` | Installs via `sudo dpkg -i` |
+          | **Linux (other distros)** | `meshcore-node-manager-linux-x64` | Standalone binary — `chmod +x` then run |
+
+          ### Windows install
+
+          1. Download the `.exe`
+          2. Double-click to run
+          3. If Windows Defender blocks it: **More info → Run anyway**
+             *(unsigned binary — no code signing certificate)*
+
+          ### Linux .deb install
+
+          ```bash
+          sudo dpkg -i meshcore-node-manager_*_amd64.deb
+          meshcore-node-manager
+          ```
+
+          ### Linux binary install
+
+          ```bash
+          chmod +x meshcore-node-manager-linux-x64
+          ./meshcore-node-manager-linux-x64
+          ```
+
+          ### Requirements
+
+          - A MeshCore-flashed LoRa node (Heltec V3/V4 recommended)
+          - Bluetooth 4.0+ adapter for BLE connections
+          - On Linux: `sudo usermod -aG dialout $USER` for Serial connections
+
+          ### Source
+
+          To run from source instead: `pip install meshcore bleak && python main.py`
+          NOTES
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "MeshCore Node Manager ${{ github.ref_name }}"
+          body_file: release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/windows-exe/meshcore-node-manager-windows-x64.exe
+            artifacts/linux-binary/meshcore-node-manager-linux-x64
+            artifacts/linux-deb/meshcore-node-manager_*_amd64.deb
