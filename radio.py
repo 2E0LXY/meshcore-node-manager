@@ -670,9 +670,9 @@ class NodeRadio:
                 if msg.ts_sent and now - msg.ts_sent > timeout:
                     expired.append((lid, msg))
         for lid, msg in expired:
-            msg.status = "timeout"
             with self._msg_lock:
                 self._pending.pop(lid, None)
+                msg.status = "timeout"
             self._bus.emit(EV_MSG_TIMEOUT, local_id=lid)
             self._emit_log(f"ACK timeout id={lid}", "warn")
         return len(expired)
@@ -707,12 +707,10 @@ class NodeRadio:
         with self._msg_lock:
             self._history.append(msg)
             self._unread_channel += 1
+            ud, uc = self._unread_direct, self._unread_channel
         self._session_write(msg)
         self._bus.emit(EV_MSG_CHANNEL, sender=sender, text=text, ts=now, hops=hops)
-        self._bus.emit(EV_UNREAD_CHANGE,
-                       direct=self._unread_direct,
-                       channel=self._unread_channel)
-        self._emit_log(f"Channel [{sender}]: {text}", "info")
+        self._bus.emit(EV_UNREAD_CHANGE, direct=ud, channel=uc)
 
     def _rx_direct(self, payload):
         sender, text, hops = self._split_payload(payload)
@@ -725,12 +723,10 @@ class NodeRadio:
         with self._msg_lock:
             self._history.append(msg)
             self._unread_direct += 1
+            ud, uc = self._unread_direct, self._unread_channel
         self._session_write(msg)
         self._bus.emit(EV_MSG_DIRECT, sender=sender, text=text, ts=now, hops=hops)
-        self._bus.emit(EV_UNREAD_CHANGE,
-                       direct=self._unread_direct,
-                       channel=self._unread_channel)
-        self._emit_log(f"DM [{sender}]: {text}", "info")
+        self._bus.emit(EV_UNREAD_CHANGE, direct=ud, channel=uc)
 
     def _advance_pending(self, _payload):
         with self._msg_lock:

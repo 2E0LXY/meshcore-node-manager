@@ -298,27 +298,30 @@ class Hub:
         async with self._lock:
             targets = {a: c for a, c in self._clients.items()
                        if a != skip_addr}
+        relayed = 0
         for _addr, client in targets.items():
             try:
                 await client.ws.send(raw)
                 client.tx += 1
                 self._stats["total_relayed"] += 1
-
-                # Log outbound to feed
-                frame = self._parse(raw)
-                if frame:
-                    ftype   = frame.get("type", "")
-                    payload = frame.get("payload", {})
-                    self._feed_append({
-                        "ts":   time.strftime("%H:%M:%S"),
-                        "dir":  "→",
-                        "from": frame.get("origin", "?"),
-                        "to":   client.node_name,
-                        "type": ftype,
-                        "text": self._feed_text(ftype, frame, payload),
-                    })
+                relayed += 1
             except Exception:
                 pass
+
+        # One feed entry per relayed message (not per client)
+        if relayed:
+            frame = self._parse(raw)
+            if frame:
+                ftype   = frame.get("type", "")
+                payload = frame.get("payload", {})
+                self._feed_append({
+                    "ts":   time.strftime("%H:%M:%S"),
+                    "dir":  "→",
+                    "from": frame.get("origin", "?"),
+                    "to":   f"{relayed} client(s)",
+                    "type": ftype,
+                    "text": self._feed_text(ftype, frame, payload),
+                })
 
     # ── web dashboard ─────────────────────────────────────────────────────────
 

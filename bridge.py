@@ -468,7 +468,7 @@ class Bridge:
         ts     = float(payload.get("ts", time.time()))
         if not text:
             return
-        # Prefix with [BRIDGE] so users can tell it's from a remote network
+        # Prefix so users can tell it's from a remote network
         prefixed = f"[{origin}] {text}"
         self._bus.emit(EV_MSG_CHANNEL,
                        sender=f"⟷{sender}",
@@ -477,9 +477,9 @@ class Bridge:
                        hops=None)
         self._log(f"Bridge RX channel [{origin}] {sender}: {text[:40]}", "debug")
 
-        # Also inject into the local radio's outgoing channel so local LoRa
-        # nodes in range hear the bridged message
-        if self._radio and self._radio.online:
+        # Inject onto local LoRa channel only if the setting permits it
+        inject = self._settings.get("bridge_inject_radio", True)
+        if inject and self._radio and self._radio.online:
             try:
                 self._radio.transmit_channel(f"[{origin}] {sender}: {text}")
             except Exception:
@@ -563,7 +563,10 @@ class Bridge:
         self._broadcast_async(FrameType.CONTACT_UPD, payload)
 
     def _broadcast_async(self, ftype: FrameType, payload: dict) -> None:
-        """Submit a broadcast to the background loop without blocking."""
+        """
+        Submit a broadcast to the background loop without blocking.
+        Safe to call from any thread including the bridge loop itself.
+        """
         if not self._loop or not self._loop.is_running():
             return
         secret    = self._settings.get("bridge_secret", "")
@@ -573,6 +576,9 @@ class Bridge:
         # Register the UUID so we don't echo back our own messages
         frame = json.loads(raw)
         self._dedup.seen(frame["id"])
+        # run_coroutine_threadsafe is non-blocking: it enqueues and returns.
+        # Safe even when called from the bridge loop thread itself because
+        # the submitted coroutine runs after the current call chain completes.
         asyncio.run_coroutine_threadsafe(
             self._send_to_all(raw), self._loop)
 

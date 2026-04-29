@@ -936,7 +936,7 @@ class SettingsTab(TabBase):
         for key, var in self._vars.items():
             raw = var.get()
             # Coerce int fields
-            if key in ("auto_ping_interval", "reconnect_max"):
+            if key in ("auto_ping_interval", "reconnect_max", "bridge_port"):
                 try:
                     raw = int(raw)
                 except (ValueError, TypeError):
